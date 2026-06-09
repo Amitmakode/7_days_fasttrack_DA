@@ -1,0 +1,772 @@
+create database retail_dw;
+
+C:\Users\amitm>mysql -u root -p retail_dw < "C:\Users\amitm\Desktop\ProjectDataSales\OLTP\00_retail_dw.sql"
+Enter password: *****
+
+-----------------------------------------------
+
+Yeh file ek **Retail Store ka OLTP Database Schema** hai.
+
+Isme customers, products, stores, suppliers, sales orders aur inventory ke tables 
+banaye gaye hain — basically ek retail business ke din-badin transactions store karne ka structure.
+
+**OLTP** (Online Transaction Processing) isliye use kiya kyunki yeh real-time data insert/update
+ ke liye optimized hota hai — jaise koi order place kare, stock ghate, ya customer register ho.
+
+Indexes aur foreign key relationships isliye diye hain taaki queries fast rahe aur data 
+consistent rahe.
+
+
+**Nahi**, OLTP raw database nahi hota — yeh **khud primary database hota hai** jisme 
+live transactions directly store hote hain.
+
+Isse **Database Architects ya Backend Developers** banate hain, business ke requirements
+ ke hisaab se.
+
+Iska purpose hota hai **daily operations** handle karna — jaise orders, payments, 
+inventory updates — real-time mein fast insert/update ke liye.
+
+Baad mein isi OLTP data se **OLAP / Data Warehouse** banaya jata hai jo reporting aur 
+analytics ke liye hota hai.
+
+
+--------------------------------------------
+
+create database retail_oltp ;
+
+
+C:\Users\amitm>mysql -u root -p retail_dw < "C:\Users\amitm\Desktop\ProjectDataSales\eda_final.sql" > output.txt
+Enter password: *****
+
+
+**Lookup tables** chhoti reference tables hoti hain jo fixed/limited values store karti hain 
+— jaise gender (M/F), payment mode (Cash/Card/UPI), order status (Pending/Delivered).
+
+Inhe isliye banate hain taaki **repeat data avoid ho** — har order mein "Cash" text likhne 
+ki jagah sirf `payment_mode_id = 1` store hota hai, jo storage aur performance dono bachata hai.
+
+Yeh **data consistency** bhi ensure karta hai — koi bhi invalid value enter nahi ho sakti 
+kyunki ID sirf lookup table se leni padti hai.
+
+
+-----------------------------------
+
+C:\Users\amitm>mysql -u root -p retail_oltp < "F:\Project\ProjectDataSales\OLTP\02_lookup_table_fill.sql"
+Enter password: *****
+
+
+Yeh file **lookup tables mein data fill karne** ke liye hai — gender, payment mode, 
+channel aur order status ki fixed values insert ki gayi hain.
+
+Kuch values **directly likhi hain** (gender, status) aur kuch **existing Data Warehouse 
+(`retail_dw`) se copy** ki gayi hain taaki dono databases mein same values rahe.
+
+
+-------------------------------------------
+
+C:\Users\amitm>mysql -u root -p retail_oltp < "F:\Project\ProjectDataSales\OLTP\03_oltp_load_from_retail_dw.sql"
+Enter password: *****
+
+Yeh file **ek baar ka data migration** hai jo purane `retail_dw` (Data Warehouse) 
+se naya `retail_oltp` database mein saara data load karti hai — categories, brands,
+ suppliers, stores, customers, products, orders, aur inventory sab ek stored procedure mein.
+
+Yeh **one-time transfer** isliye kiya gaya kyunki purana `retail_dw` ab deprecated hoga
+ aur aage se sirf `retail_oltp` use hoga.
+ 
+ 
+------------------------------------------------
+
+
+C:\Users\amitm>mysql -u root -p retail_oltp < "F:\Project\ProjectDataSales\OLTP\04_data_validation_and_test.sql"
+Enter password: *****
+
+
+Yeh file **`retail_dw` (purana Data Warehouse) aur `retail_oltp` (naya database) dono ko 
+compare** karke validate karegi — customers, products, stores aur transactions ka count
+ match hoga ya nahi check karegi.
+
+Saath mein **referential integrity, data quality** (jaise MRP < cost price) aur 
+**sample orders** bhi verify karega taaki confirm ho sake ki migration sahi hua hai. 
+
+
+---------------------------------------
+
+C:\Users\amitm>mysql -u root -p retail_oltp < "F:\Project\ProjectDataSales\OLTP\05_quick_reference.sql"
+Enter password: *****
+
+
+Yeh file **migration ke baad OLTP database ka quick health check** karti hai
+ — total counts, date range, top customers aur top products dikhati hai confirm 
+ karne ke liye ki sab data sahi load hua.
+
+Yeh **`retail_oltp` schema** mein run hogi kyunki file ke shuru mein hi `USE retail_oltp;`
+ likha hua hai.
+ 
+ 
+--------------------------------------
+--------------------------------------
+
+
+CREATE DATABASE retail_rolap;
+
+
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\01_create_rolap_schema.sql"
+Enter password: *****
+Status
+ROLAP Database Schema Created Successfully
+
+
+
+Yeh file **`retail_rolap` naam ka analytical database** banati hai jisme Star Schema hai 
+— ek fact table (`fact_sales`) aur uske saath product, store, customer, supplier aur date 
+ki dimension tables hain.
+
+Saath mein **pre-computed aggregate tables** bhi hain (daily/monthly sales, customer 
+lifetime value) taaki analytical queries fast chal sake — yeh OLTP se bilkul alag hai, 
+sirf **reporting aur analysis** ke liye hai.
+
+Haan, yeh ek **ROLAP-based Data Warehouse** hai jo Star Schema use karta hai analytical 
+reporting ke liye.
+
+
+-----------------------------------------------------
+-----------------------------------------------------
+
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\02_create_molap_schema.sql"
+Enter password: *****
+Status
+MOLAP Database Schema Created Successfully
+
+
+Yeh file **`retail_molap` database** banati hai jisme pre-aggregated **multi-dimensional
+ cubes** hain — store x product x date, category x month, customer segment, time series
+ jaise alag-alag analysis ke liye ready-made tables.
+
+ROLAP se yeh isliye alag hai kyunki isme data **pehle se calculate karke cube tables 
+mein store** hota hai taaki complex analytical queries bilkul instantly run ho sake 
+bina baar baar calculations kiye.
+
+Cube table ek **pre-calculated summary table** hoti hai jisme multiple dimensions 
+(store, product, date) ka data pehle se aggregate karke store hota hai taaki query
+instantly result de.
+
+
+-------------------------------------------------
+-------------------------------------------------
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\03_etl_rolap_from_oltp.sql"
+Enter password: *****
+
+
+
+Yeh file **`retail_oltp` se data lekar `retail_rolap` mein ETL process** karti hai 
+— dimensions (product, store, customer, supplier), date table aur fact_sales table load karti hai.
+
+Uske baad **aggregate tables refresh** karti hai (daily/monthly sales, customer lifetime value)
+ taaki ROLAP database analytics ke liye poori tarah ready ho jaye.
+ 
+
+---------------------------------------------------
+---------------------------------------------------
+
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\04_etl_molap_from_rolap.sql"
+Enter password: *****
+
+
+Yeh file upload toh hui hai lekin content context mein nahi aaya — main file padh
+ kar batata hoon.Yeh file **`retail_rolap` se data lekar `retail_molap` ke saatho 
+ cube tables refresh** karti hai — store x product x date, category x month, time series, 
+ customer segmentation jaise 7 alag-alag cubes fill kiye jaate hain.
+
+Yeh **ROLAP se MOLAP ka ETL** hai — matlab pehle se calculated aggregates ko aur zyada 
+pre-summarized cube format mein store karta hai taaki instant multi-dimensional analysis ho sake. 
+
+
+------------------------------------------
+------------------------------------------
+
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\05_analytical_queries_rolap.sql"
+Enter password: *****
+
+
+Yeh file **`retail_rolap` database par analytical queries** run karti hai — 
+daily sales trend, top categories, store performance, customer segmentation, 
+best selling products jaise 8 ready-made business reports hain.
+
+Yeh queries **business decisions lene ke liye** hain — managers in results se 
+dekh sakte hain ki konsa store/product/customer segment best perform kar raha hai.
+
+
+--------------------------------------------
+--------------------------------------------
+
+
+C:\Users\amitm>mysql -u root -p < "F:\Project\ProjectDataSales\ROLAP\06_analytical_queries_molap.sql"
+Enter password: *****
+
+
+Yeh file **`retail_molap` ke pre-calculated cube tables par analytical queries** 
+run karti hai — category x month sales, product hierarchy drill-down, store geography rollup, 
+time series moving averages, customer segmentation aur year-over-year comparison jaise 8 
+fast reports hain.
+
+ROLAP queries se yeh isliye fast hain kyunki **data pehle se cubes mein aggregate hai** — 
+query directly cube table se result leta hai bina bade joins aur calculations kiye.
+
+
+-------------------------------------
+-------------------------------------
+
+-- 1. ROW_NUMBER, RANK, DENSE_RANK
+
+-- Live Query 1 — Store Ranking by Total Sales
+
+SELECT 
+    ds.store_name,
+    ds.city,
+    ds.store_type,
+    SUM(fs.sale_amount) AS total_sales,
+    ROW_NUMBER() OVER (ORDER BY SUM(fs.sale_amount) DESC) AS row_num,
+    RANK()       OVER (ORDER BY SUM(fs.sale_amount) DESC) AS rank_num,
+    DENSE_RANK() OVER (ORDER BY SUM(fs.sale_amount) DESC) AS dense_rank_num
+FROM retail_rolap.fact_sales fs
+JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+GROUP BY ds.store_key, ds.store_name, ds.city, ds.store_type
+ORDER BY total_sales DESC;
+
+
+-- Live Query 2 — Top 3 Products EACH Category mein
+
+
+SELECT * FROM (
+    SELECT 
+        dp.category,
+        dp.product_name,
+        SUM(fs.sale_amount) AS revenue,
+        DENSE_RANK() OVER (
+            PARTITION BY dp.category 
+            ORDER BY SUM(fs.sale_amount) DESC
+        ) AS rank_in_category
+    FROM retail_rolap.fact_sales fs
+    JOIN retail_rolap.dim_product dp ON fs.product_key = dp.product_key
+    GROUP BY dp.category, dp.product_key, dp.product_name
+) ranked
+WHERE rank_in_category <= 3;
+
+
+-- 2. LAG aur LEAD
+
+-- LAG → pichli row ki value lao (previous month sales)
+-- LEAD → agli row ki value lao (next month sales)
+
+-- Live Query 3 — Month-over-Month Sales Comparison
+
+SELECT 
+    `year_month`,
+    category,
+    total_sales,
+    LAG(total_sales)  OVER (PARTITION BY category ORDER BY `year_month`) AS prev_month_sales,
+    LEAD(total_sales) OVER (PARTITION BY category ORDER BY `year_month`) AS next_month_sales,
+    ROUND(
+        (total_sales - LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`))
+        / NULLIF(LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`), 0) * 100
+    , 2) AS mom_growth_pct
+FROM retail_rolap.agg_monthly_category_sales
+ORDER BY category, `year_month`;
+
+
+-- 3. CTEs vs Subqueries
+
+-- Rule of thumb: Agar logic 2+ baar use ho ya query complex ho → CTE use karo
+
+-- Live Query 4 — CTE: Store wise Sales + Rank
+
+WITH store_sales AS (
+    SELECT 
+        ds.store_name,
+        ds.city,
+        ds.state,
+        ds.store_type,
+        SUM(fs.sale_amount)   AS total_sales,
+        SUM(fs.profit)        AS total_profit,
+        COUNT(DISTINCT fs.transaction_id) AS order_count
+    FROM retail_rolap.fact_sales fs
+    JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+    GROUP BY ds.store_key, ds.store_name, ds.city, ds.state, ds.store_type
+),
+store_ranked AS (
+    SELECT *,
+        DENSE_RANK() OVER (PARTITION BY store_type ORDER BY total_sales DESC) AS rank_in_type
+    FROM store_sales
+)
+SELECT * FROM store_ranked
+WHERE rank_in_type <= 5
+ORDER BY store_type, rank_in_type;
+
+
+-- Samjho: Pehle CTE mein sales calculate ki, doosre CTE mein rank lagai — dono alag-alag readable blocks hain.
+
+-- Same query Subquery se (compare karo kitna ugly lagta hai):
+
+SELECT * FROM (
+    SELECT *, 
+        DENSE_RANK() OVER (PARTITION BY store_type ORDER BY total_sales DESC) AS rank_in_type
+    FROM (
+        SELECT ds.store_name, ds.city, ds.state, ds.store_type,
+            SUM(fs.sale_amount) AS total_sales,
+            SUM(fs.profit) AS total_profit,
+            COUNT(DISTINCT fs.transaction_id) AS order_count
+        FROM retail_rolap.fact_sales fs
+        JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+        GROUP BY ds.store_key, ds.store_name, ds.city, ds.state, ds.store_type
+    ) store_sales
+) store_ranked
+WHERE rank_in_type <= 5
+ORDER BY store_type, rank_in_type;
+
+
+
+------------------------------------
+------------------------------------
+
+
+-- 4. Query Optimization
+
+-- BAD
+SELECT * FROM fact_sales;
+
+-- GOOD
+SELECT sale_key, date_id, sale_amount FROM fact_sales;
+
+
+-------------------------------------
+-------------------------------------
+
+-- 1. ROW_NUMBER, RANK, DENSE_RANK
+
+-- Live Query 1 — Store Ranking by Total Sales
+
+SELECT 
+    ds.store_name,
+    ds.city,
+    ds.store_type,
+    SUM(fs.sale_amount) AS total_sales,
+    ROW_NUMBER() OVER (ORDER BY SUM(fs.sale_amount) DESC) AS row_num,
+    RANK()       OVER (ORDER BY SUM(fs.sale_amount) DESC) AS rank_num,
+    DENSE_RANK() OVER (ORDER BY SUM(fs.sale_amount) DESC) AS dense_rank_num
+FROM retail_rolap.fact_sales fs
+JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+GROUP BY ds.store_key, ds.store_name, ds.city, ds.store_type
+ORDER BY total_sales DESC;
+
+
+-- Live Query 2 — Top 3 Products EACH Category mein
+
+
+SELECT * FROM (
+    SELECT 
+        dp.category,
+        dp.product_name,
+        SUM(fs.sale_amount) AS revenue,
+        DENSE_RANK() OVER (
+            PARTITION BY dp.category 
+            ORDER BY SUM(fs.sale_amount) DESC
+        ) AS rank_in_category
+    FROM retail_rolap.fact_sales fs
+    JOIN retail_rolap.dim_product dp ON fs.product_key = dp.product_key
+    GROUP BY dp.category, dp.product_key, dp.product_name
+) ranked
+WHERE rank_in_category <= 3;
+
+
+-- 2. LAG aur LEAD
+
+-- LAG → pichli row ki value lao (previous month sales)
+-- LEAD → agli row ki value lao (next month sales)
+
+-- Live Query 3 — Month-over-Month Sales Comparison
+
+SELECT 
+    `year_month`,
+    category,
+    total_sales,
+    LAG(total_sales)  OVER (PARTITION BY category ORDER BY `year_month`) AS prev_month_sales,
+    LEAD(total_sales) OVER (PARTITION BY category ORDER BY `year_month`) AS next_month_sales,
+    ROUND(
+        (total_sales - LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`))
+        / NULLIF(LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`), 0) * 100
+    , 2) AS mom_growth_pct
+FROM retail_rolap.agg_monthly_category_sales
+ORDER BY category, `year_month`;
+
+
+-- 3. CTEs vs Subqueries
+
+-- Rule of thumb: Agar logic 2+ baar use ho ya query complex ho → CTE use karo
+
+-- Live Query 4 — CTE: Store wise Sales + Rank
+
+WITH store_sales AS (
+    SELECT 
+        ds.store_name,
+        ds.city,
+        ds.state,
+        ds.store_type,
+        SUM(fs.sale_amount)   AS total_sales,
+        SUM(fs.profit)        AS total_profit,
+        COUNT(DISTINCT fs.transaction_id) AS order_count
+    FROM retail_rolap.fact_sales fs
+    JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+    GROUP BY ds.store_key, ds.store_name, ds.city, ds.state, ds.store_type
+),
+store_ranked AS (
+    SELECT *,
+        DENSE_RANK() OVER (PARTITION BY store_type ORDER BY total_sales DESC) AS rank_in_type
+    FROM store_sales
+)
+SELECT * FROM store_ranked
+WHERE rank_in_type <= 5
+ORDER BY store_type, rank_in_type;
+
+
+-- Samjho: Pehle CTE mein sales calculate ki, doosre CTE mein rank lagai — dono alag-alag readable blocks hain.
+
+-- Same query Subquery se (compare karo kitna ugly lagta hai):
+
+SELECT * FROM (
+    SELECT *, 
+        DENSE_RANK() OVER (PARTITION BY store_type ORDER BY total_sales DESC) AS rank_in_type
+    FROM (
+        SELECT ds.store_name, ds.city, ds.state, ds.store_type,
+            SUM(fs.sale_amount) AS total_sales,
+            SUM(fs.profit) AS total_profit,
+            COUNT(DISTINCT fs.transaction_id) AS order_count
+        FROM retail_rolap.fact_sales fs
+        JOIN retail_rolap.dim_store ds ON fs.store_key = ds.store_key
+        GROUP BY ds.store_key, ds.store_name, ds.city, ds.state, ds.store_type
+    ) store_sales
+) store_ranked
+WHERE rank_in_type <= 5
+ORDER BY store_type, rank_in_type;
+
+
+-- 4. Query Optimization
+
+-- BAD
+SELECT * FROM fact_sales;
+
+-- GOOD
+SELECT sale_key, date_id, sale_amount FROM fact_sales;
+
+
+
+-- 5. 10 DMart SQL Problems
+
+-- Q1. Har state mein sabse zyada sales wala store kaun sa hai?
+
+WITH state_store AS (
+    SELECT ds.state, ds.store_name,
+        SUM(fs.sale_amount) AS total_sales,
+        RANK() OVER (PARTITION BY ds.state ORDER BY SUM(fs.sale_amount) DESC) AS rnk
+    FROM fact_sales fs
+    JOIN dim_store ds ON fs.store_key = ds.store_key
+    GROUP BY ds.state, ds.store_key, ds.store_name
+)
+SELECT state, store_name, total_sales
+FROM state_store WHERE rnk = 1;
+
+
+-- Q2. Top 5 products jo last 3 months mein sabse zyada biki?
+
+SELECT 
+    dp.product_name, dp.category,
+    SUM(fs.quantity) AS units_sold,
+    SUM(fs.sale_amount) AS revenue
+FROM fact_sales fs
+JOIN dim_product dp ON fs.product_key = dp.product_key
+WHERE fs.date_id >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 MONTH), '%Y%m%d')
+GROUP BY dp.product_key, dp.product_name, dp.category
+ORDER BY units_sold DESC
+LIMIT 5;
+
+
+-- Q3. Har month ka best selling category kaun sa raha?
+
+WITH monthly_cat AS (
+    SELECT 
+        d.year_val, d.month_name,
+        dp.category,
+        SUM(fs.sale_amount) AS total_sales,
+        RANK() OVER (PARTITION BY d.year_val, d.month_val ORDER BY SUM(fs.sale_amount) DESC) AS rnk
+    FROM fact_sales fs
+    JOIN dim_date d ON fs.date_id = d.date_id
+    JOIN dim_product dp ON fs.product_key = dp.product_key
+    GROUP BY d.year_val, d.month_val, d.month_name, dp.category
+)
+SELECT year_val, month_name, category, total_sales
+FROM monthly_cat WHERE rnk = 1
+ORDER BY year_val, total_sales DESC;
+
+
+-- Q4. VIP customers jinhe 60+ din se kuch nahi liya (churn risk)?
+
+SELECT 
+    dc.customer_name, dc.city,
+    MAX(d.full_date) AS last_purchase,
+    DATEDIFF(CURDATE(), MAX(d.full_date)) AS days_inactive,
+    SUM(fs.sale_amount) AS lifetime_value
+FROM dim_customer dc
+JOIN fact_sales fs ON dc.customer_key = fs.customer_key
+JOIN dim_date d ON fs.date_id = d.date_id
+WHERE dc.customer_segment = 'VIP'
+GROUP BY dc.customer_key, dc.customer_name, dc.city
+HAVING days_inactive > 60
+ORDER BY days_inactive DESC;
+
+
+-- Q5. Har store ki MoM (Month over Month) growth?
+
+WITH monthly AS (
+    SELECT 
+        fs.store_key,
+        d.year_val * 100 + d.month_val AS `year_month`,
+        SUM(fs.sale_amount) AS total_sales
+    FROM fact_sales fs
+    JOIN dim_date d ON fs.date_id = d.date_id
+    GROUP BY fs.store_key, d.year_val, d.month_val
+)
+SELECT 
+    ds.store_name,
+    m.`year_month`,
+    m.total_sales,
+    LAG(m.total_sales) OVER (PARTITION BY m.store_key ORDER BY m.`year_month`) AS prev_month,
+    ROUND(
+        (m.total_sales - LAG(m.total_sales) OVER (PARTITION BY m.store_key ORDER BY m.`year_month`))
+        / NULLIF(LAG(m.total_sales) OVER (PARTITION BY m.store_key ORDER BY m.`year_month`), 0) * 100
+    , 2) AS mom_growth
+FROM monthly m
+JOIN dim_store ds ON m.store_key = ds.store_key
+ORDER BY ds.store_name, m.`year_month`;
+
+-- Q6. Sabse zyada profitable brand kaun sa hai?
+
+SELECT 
+    dp.brand,
+    SUM(fs.sale_amount) AS revenue,
+    SUM(fs.profit) AS total_profit,
+    ROUND(SUM(fs.profit) / NULLIF(SUM(fs.sale_amount), 0) * 100, 2) AS profit_margin_pct
+FROM fact_sales fs
+JOIN dim_product dp ON fs.product_key = dp.product_key
+GROUP BY dp.brand
+ORDER BY total_profit DESC
+LIMIT 10;
+
+
+
+-- Q7. Weekend vs Weekday sales comparison?
+
+SELECT 
+    CASE WHEN d.is_weekend = 1 THEN 'Weekend' ELSE 'Weekday' END AS day_type,
+    COUNT(DISTINCT fs.transaction_id) AS total_orders,
+    SUM(fs.sale_amount) AS total_sales,
+    ROUND(AVG(fs.sale_amount), 2) AS avg_order_value
+FROM fact_sales fs
+JOIN dim_date d ON fs.date_id = d.date_id
+GROUP BY d.is_weekend;
+
+
+-- Q8. City tier wise customer spending pattern?
+
+SELECT 
+    dc.city_tier,
+    dc.customer_segment,
+    COUNT(DISTINCT dc.customer_key) AS customers,
+    ROUND(AVG(fs.sale_amount), 2) AS avg_order_value,
+    SUM(fs.sale_amount) AS total_sales
+FROM dim_customer dc
+JOIN fact_sales fs ON dc.customer_key = fs.customer_key
+GROUP BY dc.city_tier, dc.customer_segment
+ORDER BY dc.city_tier, total_sales DESC;
+
+
+
+-- Q9. Har product ki running total sales (cumulative)?
+
+SELECT 
+    d.full_date,
+    dp.product_name,
+    SUM(fs.sale_amount) AS daily_sales,
+    SUM(SUM(fs.sale_amount)) OVER (
+        PARTITION BY dp.product_key 
+        ORDER BY d.full_date
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+    ) AS cumulative_sales
+FROM fact_sales fs
+JOIN dim_date d ON fs.date_id = d.date_id
+JOIN dim_product dp ON fs.product_key = dp.product_key
+GROUP BY d.full_date, dp.product_key, dp.product_name
+ORDER BY dp.product_name, d.full_date;
+
+
+-- Q10. Loyalty vs Non-loyalty customers ka revenue difference?
+
+SELECT 
+    CASE WHEN dc.loyalty_member = 1 THEN 'Loyalty Member' ELSE 'Non-Loyalty' END AS member_type,
+    COUNT(DISTINCT dc.customer_key) AS customer_count,
+    SUM(fs.sale_amount) AS total_revenue,
+    ROUND(AVG(fs.sale_amount), 2) AS avg_order_value,
+    ROUND(SUM(fs.sale_amount) / COUNT(DISTINCT dc.customer_key), 2) AS revenue_per_customer
+FROM dim_customer dc
+JOIN fact_sales fs ON dc.customer_key = fs.customer_key
+GROUP BY dc.loyalty_member;
+
+
+-- Query 1 — BAD vs GOOD: Sales Report with Filtering
+
+-- bad
+
+SELECT * 
+FROM fact_sales fs
+JOIN dim_product dp ON fs.product_key = dp.product_key
+JOIN dim_store ds ON fs.store_key = ds.store_key
+JOIN dim_date d ON fs.date_id = d.date_id
+WHERE YEAR(d.full_date) = 2024
+AND d.month_val = 6;
+
+
+--  GOOD (Fast)
+
+SELECT 
+    fs.transaction_id,
+    dp.product_name,
+    dp.category,
+    ds.store_name,
+    ds.city,
+    fs.sale_amount,
+    fs.profit
+FROM fact_sales fs
+JOIN dim_product dp ON fs.product_key = dp.product_key
+JOIN dim_store ds ON fs.store_key = ds.store_key
+WHERE fs.date_id BETWEEN 20240601 AND 20240630;
+
+
+-- Query 2 — BAD vs GOOD: Top Products per Category
+
+-- bad
+
+SELECT 
+    dp.category,
+    dp.product_name,
+    SUM(fs.sale_amount) AS revenue
+FROM fact_sales fs
+JOIN dim_product dp ON fs.product_key = dp.product_key
+GROUP BY dp.category, dp.product_name
+HAVING SUM(fs.sale_amount) = (
+    SELECT MAX(total)
+    FROM (
+        SELECT dp2.category, SUM(fs2.sale_amount) AS total
+        FROM fact_sales fs2
+        JOIN dim_product dp2 ON fs2.product_key = dp2.product_key
+        GROUP BY dp2.category, dp2.product_name
+    ) sub
+    WHERE sub.category = dp.category
+);
+
+
+-- good
+
+WITH product_sales AS (
+    SELECT 
+        dp.category,
+        dp.product_name,
+        SUM(fs.sale_amount) AS revenue
+    FROM fact_sales fs
+    JOIN dim_product dp ON fs.product_key = dp.product_key
+    GROUP BY dp.category, dp.product_key, dp.product_name
+),
+ranked AS (
+    SELECT *,
+        DENSE_RANK() OVER (PARTITION BY category ORDER BY revenue DESC) AS rnk
+    FROM product_sales
+)
+SELECT category, product_name, revenue
+FROM ranked
+WHERE rnk = 1
+ORDER BY revenue DESC;
+
+
+-- MOM comparision krke dikhao00:20Month-over-Month (MoM) Comparison
+
+-- Query — Category wise MoM Sales Comparison
+
+WITH monthly_sales AS (
+    SELECT 
+        dp.category,
+        d.year_val,
+        d.month_val,
+        d.year_val * 100 + d.month_val AS `year_month`,
+        d.month_name,
+        SUM(fs.sale_amount) AS total_sales,
+        SUM(fs.profit) AS total_profit,
+        COUNT(DISTINCT fs.transaction_id) AS total_orders
+    FROM fact_sales fs
+    JOIN dim_date d ON fs.date_id = d.date_id
+    JOIN dim_product dp ON fs.product_key = dp.product_key
+    GROUP BY dp.category, d.year_val, d.month_val, d.month_name
+),
+mom_comparison AS (
+    SELECT 
+        category,
+        `year_month`,
+        month_name,
+        year_val,
+        total_sales,
+        total_profit,
+        total_orders,
+
+        -- Pichle mahine ki sales
+        LAG(total_sales) OVER (
+            PARTITION BY category ORDER BY `year_month`
+        ) AS prev_month_sales,
+
+        -- Sales difference
+        total_sales - LAG(total_sales) OVER (
+            PARTITION BY category ORDER BY `year_month`
+        ) AS sales_difference,
+
+        -- MoM Growth %
+        ROUND(
+            (total_sales - LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`))
+            / NULLIF(LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`), 0) * 100
+        , 2) AS mom_growth_pct,
+
+        -- Trend indicator
+        CASE 
+            WHEN total_sales > LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`)
+                THEN 'UP'
+            WHEN total_sales < LAG(total_sales) OVER (PARTITION BY category ORDER BY `year_month`)
+                THEN 'DOWN'
+            ELSE 'FLAT'
+        END AS trend
+    FROM monthly_sales
+)
+SELECT 
+    category,
+    `year_month`,
+    month_name,
+    year_val,
+    ROUND(total_sales, 2)       AS current_sales,
+    ROUND(prev_month_sales, 2)  AS prev_month_sales,
+    ROUND(sales_difference, 2)  AS sales_difference,
+    mom_growth_pct,
+    trend,
+    total_orders
+FROM mom_comparison
+WHERE prev_month_sales IS NOT NULL
+ORDER BY category, `year_month`;
+
+
+
+
+
+
